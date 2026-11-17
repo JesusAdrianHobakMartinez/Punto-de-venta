@@ -56,13 +56,6 @@ El servidor conserva cambios pendientes cuando un dispositivo se desconecta y pe
 
 ## Requisitos
 
-- Node.js y npm.
-- Windows para generar el instalador de escritorio.
-- Android Studio y Android SDK para Android.
-- macOS con Xcode para iOS.
-
-## Requisitos
-
 - Node.js y npm
 - Windows para generar el instalador de escritorio
 - Android Studio y Android SDK para compilar e instalar la aplicación Android
