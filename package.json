@@ -1,0 +1,61 @@
+{
+  "name": "tienda",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build --base-href ./",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:sync": "node --test electron/store-server.test.cjs",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:dist": "npm run build && electron-builder --win nsis",
+    "mobile:sync": "npm run build && cap sync",
+    "mobile:apk": "npm run mobile:sync && cd android && gradlew.bat assembleDebug",
+    "mobile:android": "cap open android",
+    "mobile:ios": "cap open ios"
+  },
+  "main": "electron/main.cjs",
+  "private": true,
+  "build": {
+    "appId": "com.laesquinita.tienda",
+    "productName": "La Esquinita",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/tienda/browser/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "packageManager": "npm@11.20.0",
+  "dependencies": {
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.7",
+    "@angular/cli": "^22.2.7",
+    "@angular/compiler-cli": "^22.2.0",
+    "@capacitor/cli": "^8.6.2",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "jsdom": "^30.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.0"
+  }
+}

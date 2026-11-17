@@ -1,0 +1,612 @@
+@if (!currentUser) {
+  <main class="login-page">
+    <section class="login-card">
+      <div class="brand-mark">🛍️</div>
+      @if (isMobileApp || isDesktopApp) {
+        <form class="login-form" (ngSubmit)="connectStore()">
+          <p class="eyebrow">{{ isDesktopApp ? 'CONECTA ESTA COMPUTADORA' : 'CONECTA TU TIENDA' }}</p>
+          <h2>{{ isDesktopApp ? 'Vincular con la computadora principal' : 'Conexión de la tienda' }}</h2>
+          @if (isDesktopApp) {
+            <p class="muted">Ingresa la dirección y la clave única que generó el administrador en la computadora principal. Usa una IP privada o de Tailscale.</p>
+            <label for="desktop-server-url">Dirección de la computadora principal</label>
+            <input id="desktop-server-url" name="desktopServerUrl" [(ngModel)]="desktopServerUrl" inputmode="url" autocomplete="url" placeholder="http://100.100.20.5:43827" required>
+            <label for="desktop-sync-token">Clave única de este equipo</label>
+            <input id="desktop-sync-token" name="desktopSyncToken" [(ngModel)]="desktopSyncToken" type="password" autocomplete="off" required>
+          } @else {
+            <p class="muted">En la computadora principal, abre <strong>Conexión móvil</strong> y copia la dirección y la clave para este teléfono.</p>
+            <label for="mobile-server-url">Dirección de la computadora</label>
+            <input id="mobile-server-url" name="mobileServerUrl" [(ngModel)]="mobileServerUrl" inputmode="url" autocomplete="url" placeholder="http://192.168.1.20:43827" required>
+            <label for="mobile-sync-token">Clave de conexión</label>
+            <input id="mobile-sync-token" name="mobileSyncToken" [(ngModel)]="mobileSyncToken" type="password" autocomplete="off" required>
+          }
+          @if (connectionStatus) { <p class="form-message" role="status">{{ connectionStatus }}</p> }
+          <button class="button button-primary login-button" type="submit" [disabled]="connectionBusy">{{ connectionBusy ? 'Conectando...' : (isDesktopApp ? 'Conectar esta computadora' : 'Conectar con la tienda') }} <span>→</span></button>
+        </form>
+      }
+      @if (needsAdminSetup) {
+        <p class="eyebrow">CONFIGURACIÓN INICIAL</p>
+        <h1>Prepara tu tienda.</h1>
+        <p class="muted">Crea la cuenta privada del administrador. Después podrás dar de alta a tus empleados.</p>
+        <form class="login-form" (ngSubmit)="createInitialAdmin()">
+          <label for="initial-admin-name">Nombre del administrador</label>
+          <input id="initial-admin-name" name="initialAdminName" [(ngModel)]="initialAdminName" autocomplete="name" placeholder="Tu nombre" required>
+          <label for="initial-admin-user">Usuario</label>
+          <input id="initial-admin-user" name="initialAdminUsername" [(ngModel)]="initialAdminUsername" autocomplete="username" placeholder="Crea un usuario" required>
+          <label for="initial-admin-password">Contraseña</label>
+          <input id="initial-admin-password" name="initialAdminPassword" [(ngModel)]="initialAdminPassword" type="password" autocomplete="new-password" minlength="10" placeholder="Mínimo 10 caracteres" required>
+          <label for="confirm-admin-password">Confirma la contraseña</label>
+          <input id="confirm-admin-password" name="confirmAdminPassword" [(ngModel)]="confirmAdminPassword" type="password" autocomplete="new-password" minlength="10" placeholder="Vuelve a escribirla" required>
+          @if (message) { <p class="form-message error-message">{{ message }}</p> }
+          <button class="button button-primary login-button" type="submit">Crear cuenta de administrador <span>→</span></button>
+        </form>
+        <p class="security-note">Esta cuenta será la única con acceso a la administración. Guarda bien tu contraseña.</p>
+      } @else {
+        <p class="eyebrow">PUNTO DE VENTA</p>
+        <h1>Tu tienda, en orden.</h1>
+        <p class="muted">Inicia sesión con la cuenta que te asignó el administrador.</p>
+        <form class="login-form" (ngSubmit)="login()">
+          <label for="login-user">Usuario</label>
+          <input id="login-user" name="loginUsername" [(ngModel)]="loginUsername" autocomplete="username" placeholder="Tu usuario" required>
+          <label for="login-password">Contraseña</label>
+          <input id="login-password" name="loginPassword" [(ngModel)]="loginPassword" type="password" autocomplete="current-password" placeholder="Tu contraseña" required>
+          @if (message) { <p class="form-message error-message">{{ message }}</p> }
+          <button class="button button-primary login-button" type="submit">Entrar a la tienda <span>→</span></button>
+        </form>
+        <p class="security-note">Si todavía no tienes usuario, solicítalo al administrador de la tienda.</p>
+      }
+    </section>
+  </main>
+} @else {
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" (click)="navigate('inicio'); $event.preventDefault()">
+        <span class="brand-icon">🛍️</span>
+        <span><strong>Magnis</strong><small>TIENDA DE ABARROTES</small></span>
+      </a>
+      <div class="store-status"><span class="status-dot"></span> {{ storeConnected ? 'Sincronización activa' : 'Punto de venta activo' }}</div>
+      <p class="nav-caption">MENÚ PRINCIPAL</p>
+      <nav class="side-nav" aria-label="Menú principal">
+        <button [class.active]="activeSection === 'inicio'" (click)="navigate('inicio')"><span>⌂</span> Inicio</button>
+        <button [class.active]="activeSection === 'productos'" (click)="navigate('productos')"><span>▦</span>@if (isAdmin) { Productos } @else { Punto de venta }</button>
+        <button [class.active]="activeSection === 'ventas'" (click)="navigate('ventas')"><span>↗</span> Ventas <span class="nav-count">{{ visibleSales.length }}</span></button>
+        @if (isAdmin) {
+          <p class="nav-caption management-caption">ADMINISTRACIÓN</p>
+          <button [class.active]="activeSection === 'reportes'" (click)="navigate('reportes')"><span>▤</span> Reportes</button>
+          <button [class.active]="activeSection === 'equipo'" (click)="navigate('equipo')"><span>♙</span> Equipo</button>
+          <button [class.active]="activeSection === 'categorias'" (click)="navigate('categorias')"><span>☷</span> Categorías</button>
+          <button [class.active]="activeSection === 'solicitudes'" (click)="navigate('solicitudes')"><span>✉</span> Solicitudes <span class="nav-count">{{ pendingDeletionRequests.length }}</span></button>
+          <button [class.active]="activeSection === 'cortes'" (click)="navigate('cortes')"><span>＄</span> Cortes @if (pendingCashClosingNotifications) { <span class="nav-count">{{ pendingCashClosingNotifications }}</span> }</button>
+          <button [class.active]="activeSection === 'camaras'" (click)="navigate('camaras')"><span>▣</span> Cámaras</button>
+          <button [class.active]="activeSection === 'conexion'" (click)="navigate('conexion')"><span>⌁</span> Conexión de equipos</button>
+        }
+        @if (isMobileApp && !isAdmin) {
+          <button [class.active]="activeSection === 'conexion'" (click)="navigate('conexion')"><span>⌁</span> Conexión</button>
+        }
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-tip"><span>✦</span><strong>Un negocio en marcha</strong><p>Tu inventario y tus ventas, siempre al día.</p></div>
+        <div class="signed-in">
+          <div class="avatar">{{ currentUser.name.charAt(0) }}</div>
+          <div class="signed-in-name"><strong>{{ currentUser.name }}</strong><small>{{ currentUser.role }}</small></div>
+          <button class="logout-button" aria-label="Cerrar sesión" title="Cerrar sesión" (click)="logout()">↪</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="breadcrumb">Tienda <span>/</span>
+          @switch (activeSection) {
+            @case ('inicio') { <strong>Inicio</strong> }
+            @case ('productos') { <strong>Productos</strong> }
+            @case ('ventas') { <strong>Ventas</strong> }
+            @case ('reportes') { <strong>Reportes</strong> }
+            @case ('equipo') { <strong>Equipo</strong> }
+            @case ('categorias') { <strong>Categorías</strong> }
+            @case ('solicitudes') { <strong>Solicitudes</strong> }
+            @case ('camaras') { <strong>Cámaras</strong> }
+            @case ('cortes') { <strong>Cortes</strong> }
+            @case ('conexion') { <strong>Conexión de equipos</strong> }
+          }
+        </div>
+        <div class="topbar-right">
+          <span class="today-label">{{ todaySales.length }} ventas hoy</span>
+          <div class="top-avatar">{{ currentUser.name.charAt(0) }}</div>
+        </div>
+      </header>
+
+      <div class="page-content">
+        @if (message) {
+          <div class="notice" role="status"><span>✓</span>{{ message }}<button aria-label="Cerrar aviso" (click)="message = ''">×</button></div>
+        }
+
+        @if (activeSection === 'inicio') {
+          <section class="welcome-row">
+            <div>
+              <p class="eyebrow">{{ todaySales.length ? 'ASÍ VA TU DÍA' : 'PANEL DE CONTROL' }}</p>
+              <h1>¡Hola, {{ currentUser.name.split(' ')[0] }}! <span class="wave">✦</span></h1>
+              <p class="muted">Aquí tienes el resumen de tu tienda.</p>
+            </div>
+            @if (isAdmin) {
+              <button class="button button-primary" (click)="navigate('productos')">＋ Agregar productos</button>
+            } @else {
+              <button class="button button-primary" (click)="navigate('productos')">＋ Nueva venta</button>
+            }
+          </section>
+
+          <div class="stats-grid">
+            <article class="stat-card">
+              <div class="stat-icon mint">＄</div><span class="stat-label">VENTAS DE HOY</span>
+              <strong class="stat-value">{{ todayRevenue | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+              <span class="stat-foot">{{ todaySales.length }} transacciones registradas</span>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon peach">↗</div><span class="stat-label">{{ isAdmin ? 'VENTAS TOTALES' : 'MIS VENTAS' }}</span>
+              <strong class="stat-value">{{ (isAdmin ? totalRevenue : mySalesTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+              <span class="stat-foot">{{ isAdmin ? sales.length : salesForEmployee(currentUser.id).length }} ventas acumuladas</span>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon lavender">▦</div><span class="stat-label">PRODUCTOS ACTIVOS</span>
+              <strong class="stat-value">{{ products.length }}</strong>
+              <span class="stat-foot">En {{ categories.length }} categorías</span>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon yellow">!</div><span class="stat-label">STOCK BAJO</span>
+              <strong class="stat-value">{{ lowStockCount }}</strong>
+              <span class="stat-foot">Productos con 5 piezas o menos</span>
+            </article>
+          </div>
+
+          @if (!isAdmin && currentShift) {
+            <section class="shift-summary">
+              <div class="shift-summary-copy">
+                <span class="shift-status-dot"></span>
+                <div><strong>Turno en curso</strong><small>Horario: {{ currentShift.scheduleStart || 'Sin definir' }} – {{ currentShift.scheduleEnd || 'Sin definir' }}</small></div>
+              </div>
+              <div class="shift-summary-total"><small>Venta total del turno</small><strong>{{ currentShiftSalesTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><span>Incluye efectivo y tarjeta · {{ currentShiftSales.length }} ventas</span></div>
+              <button class="button button-light" (click)="navigate('ventas')">Ver mis ventas</button>
+            </section>
+          }
+
+          <div class="dashboard-grid">
+            <section class="panel recent-panel">
+              <div class="panel-heading"><div><h2>Ventas recientes</h2><p>Actividad registrada en la tienda</p></div><button class="text-button" (click)="navigate('ventas')">Ver todas <span>→</span></button></div>
+              @if (visibleSales.length) {
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>VENTA</th><th>EMPLEADO</th><th>FECHA</th><th>TOTAL</th></tr></thead>
+                    <tbody>
+                      @for (sale of visibleSales.slice(0, 5); track sale.id) {
+                        <tr><td><span class="sale-number">#{{ sale.id.slice(-5).toUpperCase() }}</span><small>{{ sale.items.length }} productos</small></td><td>{{ sale.employeeName }}</td><td>{{ sale.date | date:'dd MMM, HH:mm' }}</td><td class="amount-cell">{{ sale.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              } @else {
+                <div class="empty-state compact-empty"><span>🧾</span><strong>Aún no hay ventas</strong><p>Registra tu primera venta desde el catálogo.</p></div>
+              }
+            </section>
+            <section class="panel category-panel">
+              <div class="panel-heading"><div><h2>Explorar productos</h2><p>Encuentra lo que necesitas</p></div></div>
+              <div class="quick-categories">
+                @for (category of categories.slice(0, 6); track category; let i = $index) {
+                  <button class="quick-category" (click)="setCategoryFilter(category)"><span class="category-emoji">{{ ['🥨', '🥤', '🍪', '🧼', '🧺', '🫧'][i % 6] }}</span><span>{{ category }}</span><span class="category-arrow">↗</span></button>
+                }
+              </div>
+              <button class="browse-link" (click)="setCategoryFilter('Todas')">Ver todo el catálogo <span>→</span></button>
+            </section>
+          </div>
+        }
+
+        @if (activeSection === 'productos') {
+          <section class="page-heading">
+            <div><p class="eyebrow">{{ isAdmin ? 'CATÁLOGO DE LA TIENDA' : 'PUNTO DE VENTA' }}</p><h1>{{ isAdmin ? 'Productos' : 'Punto de venta' }}</h1><p class="muted">{{ isAdmin ? 'Administra los productos de tu tienda.' : 'Escanea productos, registra nuevos artículos o prepara un cobro.' }}</p></div>
+            @if (isAdmin) {
+              <div class="product-transfer-actions">
+                <input #productImportInput class="product-import-input" type="file" accept=".csv,text/csv" aria-label="Seleccionar archivo CSV de productos" (change)="importProducts($event)">
+                <button type="button" class="button button-secondary" (click)="exportProductsToCsv()"><span aria-hidden="true">⇩</span> Exportar CSV</button>
+                <button type="button" class="button button-light" (click)="productImportInput.click()"><span aria-hidden="true">⇧</span> Importar CSV</button>
+                <button type="button" class="button button-primary" (click)="openNewProduct()">＋ Agregar producto</button>
+              </div>
+            } @else {
+              <button type="button" class="button button-primary" (click)="openNewProduct()">＋ Agregar producto</button>
+            }
+          </section>
+
+          @if (showProductForm && (isAdmin || !editingProductId)) {
+            <form class="panel editor-panel" (ngSubmit)="saveProduct()">
+              <div class="panel-heading"><div><h2>{{ editingProductId ? 'Editar producto' : 'Nuevo producto' }}</h2><p>Completa la información del artículo.</p></div><button type="button" class="icon-button" aria-label="Cerrar" (click)="showProductForm = false">×</button></div>
+              <div class="form-grid">
+                <label>Nombre<input name="productName" [(ngModel)]="productDraft.name" placeholder="Ej. Papas clásicas" required></label>
+                <label>Categoría<select name="productCategory" [(ngModel)]="productDraft.category" required>@for (category of categories; track category) { <option [value]="category">{{ category }}</option> }</select></label>
+                <label>Precio (MXN)<input name="productPrice" [(ngModel)]="productDraft.price" type="number" min="0.01" step="0.01" required></label>
+                <label>Existencias<input name="productStock" [(ngModel)]="productDraft.stock" type="number" min="0" step="1" required></label>
+                <label>Código de barras<input name="productBarcode" [(ngModel)]="productDraft.barcode" inputmode="numeric" placeholder="Escanea o escribe el código"></label>
+                <label>Emoji<input name="productEmoji" [(ngModel)]="productDraft.emoji" maxlength="4" placeholder="🛍️"></label>
+                <label>Descripción<input name="productDescription" [(ngModel)]="productDraft.description" placeholder="Presentación o tamaño"></label>
+              </div>
+              <div class="form-actions"><button type="button" class="button button-light" (click)="showProductForm = false">Cancelar</button><button class="button button-primary" type="submit">Guardar producto</button></div>
+            </form>
+          }
+
+          @if (!isAdmin) {
+            <section class="barcode-scan-panel">
+              <span class="barcode-icon">▥</span>
+              <div class="barcode-copy"><strong>Escanear producto</strong><small>Conecta el lector USB y escanea; también puedes escribir el código.</small></div>
+              <input #barcodeField name="barcodeInput" [(ngModel)]="barcodeInput" (keydown.enter)="scanBarcode(); $event.preventDefault()" inputmode="none" autocomplete="off" autofocus placeholder="Código de barras" aria-label="Escanear código de barras">
+              <button type="button" class="button button-primary scan-button" (click)="scanBarcode()">Agregar</button>
+            </section>
+          }
+
+          <div class="catalog-toolbar">
+            <label class="search-box"><span>⌕</span><input name="search" [(ngModel)]="searchTerm" placeholder="Buscar productos..." aria-label="Buscar productos"></label>
+            <span class="catalog-count">{{ filteredProducts.length }} productos</span>
+          </div>
+          <div class="category-filters">
+            <button [class.selected]="selectedCategory === 'Todas'" (click)="selectedCategory = 'Todas'">Todos</button>
+            @for (category of categories; track category) { <button [class.selected]="selectedCategory === category" (click)="selectedCategory = category">{{ category }}</button> }
+          </div>
+          <div class="catalog-layout">
+            <div class="product-grid">
+              @for (product of filteredProducts; track product.id) {
+                <article class="product-card">
+                  <div class="product-art"><span>{{ product.emoji }}</span>@if (product.stock <= 5) { <span class="stock-warning">¡Últimas piezas!</span> }</div>
+                  <div class="product-info"><span class="product-category">{{ product.category }}</span><h3>{{ product.name }}</h3><p>{{ product.description || 'Producto de la tienda' }}</p>
+                    <div class="product-bottom"><div><strong>{{ product.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>{{ product.stock }} en existencia</small></div>@if (!isAdmin) { <button class="add-cart-button" [disabled]="product.stock === 0" [attr.aria-label]="'Agregar ' + product.name" (click)="addToCart(product)">＋</button> }</div>
+                    @if (isAdmin) {
+                      <div class="product-admin-actions"><button (click)="editProduct(product)">Editar</button><button (click)="deleteProduct(product)">Eliminar</button></div>
+                    } @else {
+                      @if (productDeletionRequestId === product.id) {
+                        <div class="deletion-request-form">
+                          <label>Mensaje para el administrador<textarea name="deletionRequestMessage" [(ngModel)]="deletionRequestMessage" rows="2" placeholder="Indica por qué debe eliminarse"></textarea></label>
+                          <div><button type="button" class="request-cancel" (click)="productDeletionRequestId = null">Cancelar</button><button type="button" class="request-send" (click)="sendProductDeletionRequest(product)">Enviar solicitud</button></div>
+                        </div>
+                      } @else {
+                        <div class="product-admin-actions">
+                          <button [disabled]="deletionRequests.some(request => request.productId === product.id)" (click)="requestProductDeletion(product)">
+                            {{ deletionRequests.some(request => request.productId === product.id) ? 'Solicitud enviada' : 'Solicitar eliminación' }}
+                          </button>
+                        </div>
+                      }
+                    }
+                  </div>
+                </article>
+              } @empty {
+                <div class="empty-state catalog-empty"><span>🔎</span><strong>No encontramos productos</strong><p>Prueba otra búsqueda o categoría.</p></div>
+              }
+            </div>
+            @if (!isAdmin) {
+            <aside class="panel cart-panel">
+              <div class="cart-title"><div><h2>Venta actual</h2><p>{{ cartCount }} artículos</p></div><span class="cart-icon">🧾</span></div>
+              <section class="recharge-entry">
+                <strong>Agregar recarga telefónica</strong>
+                <div class="recharge-entry-fields">
+                  <select name="rechargeProvider" [(ngModel)]="rechargeProvider" aria-label="Compañía de la recarga">
+                    @for (provider of rechargeProviders; track provider.name) { <option [value]="provider.name">{{ provider.name }}</option> }
+                  </select>
+                  <label class="recharge-amount-input"><span>$</span><input name="rechargeAmount" [(ngModel)]="rechargeAmount" type="number" min="1" step="1" placeholder="Importe" aria-label="Importe de recarga"></label>
+                  <button type="button" class="recharge-add-button" (click)="addRechargeToCart()" aria-label="Agregar recarga al ticket">＋</button>
+                </div>
+                <small class="recharge-entry-note">El importe se suma al ticket. Completa la recarga en el portal de la compañía.</small>
+              </section>
+              @if (cart.length) {
+                <div class="cart-items">
+                  @for (item of cart; track item.productId) {
+                  <div class="cart-item"><div class="cart-item-main"><strong>{{ item.name }}</strong><small>{{ item.price | currency:'MXN':'symbol-narrow':'1.2-2' }}{{ item.kind === 'recharge' ? ' · servicio' : ' c/u' }}</small></div><div class="quantity-control"><button aria-label="Quitar artículo" (click)="changeCartQuantity(item, -1)">−</button><span>{{ item.quantity }}</span>@if (item.kind !== 'recharge') { <button aria-label="Agregar uno" (click)="changeCartQuantity(item, 1)">＋</button> }</div></div>
+                  }
+                </div>
+                <div class="cart-total"><span>Total a pagar</span><strong>{{ cartTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                <div class="payment-section">
+                  <strong class="payment-heading">Forma de pago</strong>
+                  <div class="payment-options" role="group" aria-label="Forma de pago">
+                    <button type="button" [class.selected]="paymentMethod === 'Efectivo'" (click)="paymentMethod = 'Efectivo'"><span>💵</span> Efectivo</button>
+                    <button type="button" [class.selected]="paymentMethod === 'Tarjeta'" (click)="paymentMethod = 'Tarjeta'"><span>💳</span> Tarjeta</button>
+                  </div>
+                  @if (paymentMethod === 'Efectivo') {
+                    <label class="cash-received">Efectivo recibido
+                      <input name="amountReceived" [(ngModel)]="amountReceived" type="number" min="0" step="0.01" [max]="999999" placeholder="0.00">
+                    </label>
+                    <div class="change-row"><span>Cambio</span><strong>{{ changeDue | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                  } @else {
+                    <p class="payment-note">Registra la venta después de confirmar el cobro en la terminal bancaria.</p>
+                  }
+                </div>
+                <button class="button button-primary checkout-button" [disabled]="cashPaymentShortfall" (click)="completeSale()">Cobrar {{ cartTotal | currency:'MXN':'symbol-narrow':'1.2-2' }} <span>→</span></button>
+              } @else {
+                <div class="cart-empty"><span>🛒</span><strong>Tu venta está vacía</strong><p>Agrega productos del catálogo para comenzar.</p></div>
+                <div class="cart-total"><span>Total a pagar</span><strong>{{ 0 | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                <button class="button button-primary checkout-button" disabled>Completar venta <span>→</span></button>
+              }
+              <section class="recharge-shortcut">
+                <div><strong>Recargas telefónicas</strong><small>Abre el portal oficial de la compañía</small></div>
+                <div class="recharge-providers">
+                  @for (provider of rechargeProviders; track provider.name) {
+                    <a [class]="'recharge-provider ' + provider.className" [href]="provider.url" target="_blank" rel="noopener noreferrer">{{ provider.name }} <span>↗</span></a>
+                  }
+                </div>
+              </section>
+            </aside>
+            }
+          </div>
+        }
+
+        @if (activeSection === 'ventas') {
+          <section class="page-heading"><div><p class="eyebrow">HISTORIAL DEL PUNTO DE VENTA</p><h1>{{ isAdmin ? 'Todas las ventas' : 'Mis ventas' }}</h1><p class="muted">{{ isAdmin ? 'Consulta y administra las transacciones de la tienda.' : 'Consulta tus ventas y el importe acumulado para el corte.' }}</p></div>@if (isAdmin) { <button type="button" class="button button-primary export-sales-button" (click)="exportSalesToExcel()"><span aria-hidden="true">⇩</span> Exportar a Excel</button> } @else { <button type="button" class="button button-primary" (click)="navigate('productos')">＋ Nueva venta</button> }</section>
+          <section class="panel sales-panel">
+            <div class="panel-heading"><div><h2>Transacciones</h2><p>{{ visibleSales.length }} ventas · {{ visibleSalesTotal | currency:'MXN':'symbol-narrow':'1.2-2' }} en total</p></div></div>
+            @if (visibleSales.length) {
+              <div class="table-wrap"><table><thead><tr><th>FOLIO</th><th>PRODUCTOS</th>@if (isAdmin) { <th>EMPLEADO</th> }<th>FORMA DE PAGO</th><th>FECHA Y HORA</th><th>TOTAL</th>@if (isAdmin) { <th>ACCIONES</th> }</tr></thead>
+                <tbody>@for (sale of visibleSales; track sale.id) {
+                  <tr><td><span class="sale-number">#{{ sale.id.slice(-5).toUpperCase() }}</span></td><td>{{ sale.items.length }} artículos <small>{{ salePieces(sale) }} piezas</small></td>@if (isAdmin) { <td>{{ sale.employeeName }}</td> }<td>{{ sale.paymentMethod || '—' }}@if (sale.paymentMethod === 'Efectivo' && sale.changeGiven) { <small>Cambio {{ sale.changeGiven | currency:'MXN':'symbol-narrow':'1.2-2' }}</small> }</td><td>{{ sale.date | date:'dd MMMM yyyy · HH:mm' }}</td><td class="amount-cell">{{ sale.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>@if (isAdmin) { <td><button type="button" class="sale-delete-button" title="Eliminar venta y devolver existencias" aria-label="Eliminar venta" (click)="deleteSale(sale)">Eliminar</button></td> }</tr>
+                }</tbody>
+              </table></div>
+            } @else { <div class="empty-state"><span>🧾</span><strong>Aún no hay ventas registradas</strong><p>Las ventas que realices aparecerán aquí.</p><button class="button button-primary" (click)="navigate('productos')">Ir al catálogo</button></div> }
+          </section>
+        }
+
+        @if (activeSection === 'reportes' && isAdmin) {
+          <section class="page-heading"><div><p class="eyebrow">NÚMEROS CLAROS, NEGOCIO SANO</p><h1>Reportes de ventas</h1><p class="muted">Rendimiento acumulado por empleado y resultados generales.</p></div></section>
+          <div class="report-summary">
+            <article class="report-total-card"><span>VENTAS GENERALES</span><strong>{{ totalRevenue | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>Ingresos registrados en la tienda</small></article>
+            <article class="report-metric"><span class="stat-icon mint">↗</span><small>TRANSACCIONES</small><strong>{{ sales.length }}</strong><p>Ventas registradas</p></article>
+            <article class="report-metric"><span class="stat-icon lavender">♙</span><small>EMPLEADOS</small><strong>{{ employeeCount }}</strong><p>En el equipo</p></article>
+          </div>
+          <section class="panel performance-panel">
+            <div class="panel-heading"><div><h2>Rendimiento por empleado</h2><p>Comparativo de ventas acumuladas</p></div></div>
+            @if (employeeSummaries.length) {
+              <div class="performance-list">
+                @for (summary of employeeSummaries; track summary.employee.id; let i = $index) {
+                  <div class="performance-row">
+                    <div class="performance-person"><div class="avatar" [class.avatar-alt]="i % 2 === 1">{{ summary.employee.name.charAt(0) }}</div><div><strong>{{ summary.employee.name }}</strong><small>{{ summary.count }} {{ summary.count === 1 ? 'venta' : 'ventas' }}</small></div></div>
+                    <div class="performance-bar-wrap"><div class="performance-track"><div class="performance-bar" [style.width.%]="totalRevenue ? summary.total / totalRevenue * 100 : 0"></div></div></div>
+                    <strong class="performance-amount">{{ summary.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                  </div>
+                }
+              </div>
+              <div class="report-footer"><span>Total general</span><strong>{{ totalRevenue | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+            } @else { <div class="empty-state"><span>📊</span><strong>Agrega empleados para ver su rendimiento</strong><p>Los resultados aparecerán conforme se registren ventas.</p></div> }
+          </section>
+        }
+
+        @if (activeSection === 'equipo' && isAdmin) {
+          <section class="page-heading"><div><p class="eyebrow">GESTIÓN DE ACCESOS</p><h1>Equipo</h1><p class="muted">Crea perfiles y asigna permisos de acceso.</p></div></section>
+          <div class="management-layout">
+            <section class="panel team-panel"><div class="panel-heading"><div><h2>Perfiles de usuario</h2><p>{{ employees.length }} integrantes registrados</p></div></div>
+              <div class="team-list">@for (employee of employees; track employee.id) {
+                <div class="team-row"><div class="avatar" [class.avatar-alt]="employee.role === 'Administrador'">{{ employee.name.charAt(0) }}</div><div class="team-details"><strong>{{ employee.name }}</strong><small>&#64;{{ employee.username }}@if (employee.role === 'Empleado') { · {{ employee.scheduleStart || 'Horario sin definir' }}–{{ employee.scheduleEnd || 'sin definir' }} }</small></div><span class="role-badge" [class.admin-badge]="employee.role === 'Administrador'">{{ employee.role }}</span><div class="team-sales"><strong>{{ salesForEmployee(employee.id).length }}</strong><small>ventas</small></div><button type="button" class="team-edit-button" (click)="editEmployee(employee)"><span aria-hidden="true">✎</span> Editar</button><button type="button" class="delete-user-button" [disabled]="employee.id === currentUser.id || salesForEmployee(employee.id).length > 0" title="No se pueden eliminar perfiles con ventas" aria-label="Eliminar perfil" (click)="deleteEmployee(employee)">×</button></div>
+              }</div>
+            </section>
+            <form class="panel add-employee-panel" (ngSubmit)="saveEmployee()"><div class="panel-heading"><div><h2>{{ editingEmployeeId ? 'Editar perfil' : 'Nuevo perfil' }}</h2><p>{{ editingEmployeeId ? 'Actualiza los datos y permisos.' : 'Configura sus datos de acceso.' }}</p></div><span class="cart-icon">♙</span></div>
+              <label>Nombre completo<input name="employeeName" [(ngModel)]="employeeDraft.name" placeholder="Ej. Juan Pérez" required></label>
+              <label>Nombre de usuario<input name="employeeUsername" [(ngModel)]="employeeDraft.username" placeholder="Ej. juan.perez" required></label>
+              <label>Contraseña<input name="employeePassword" [(ngModel)]="employeeDraft.password" type="password" placeholder="Contraseña" required></label>
+              <label>Tipo de perfil<select name="employeeRole" [(ngModel)]="employeeDraft.role"><option value="Empleado">Empleado</option><option value="Administrador">Administrador</option></select></label>
+              @if (employeeDraft.role === 'Empleado') {
+                <div class="employee-schedule-fields">
+                  <label>Hora de entrada<input name="employeeScheduleStart" [(ngModel)]="employeeDraft.scheduleStart" type="time" required></label>
+                  <label>Hora de salida<input name="employeeScheduleEnd" [(ngModel)]="employeeDraft.scheduleEnd" type="time" required></label>
+                </div>
+                <small class="schedule-help">El horario se muestra al empleado al iniciar su turno.</small>
+              }
+              @if (editingEmployeeId) { <button type="button" class="button button-light checkout-button" (click)="cancelEmployeeEdit()">Cancelar edición</button> }
+              <button class="button button-primary checkout-button" type="submit">{{ editingEmployeeId ? 'Guardar cambios' : 'Crear perfil' }} <span>→</span></button>
+            </form>
+          </div>
+        }
+
+        @if (activeSection === 'categorias' && isAdmin) {
+          <section class="page-heading"><div><p class="eyebrow">ORDENA TU CATÁLOGO</p><h1>Categorías</h1><p class="muted">Organiza los productos para encontrarlos más rápido.</p></div></section>
+          <div class="category-management">
+            <form class="panel new-category-panel" (ngSubmit)="addCategory()"><div class="panel-heading"><div><h2>Nueva categoría</h2><p>Agrega una sección a tu catálogo.</p></div><span class="cart-icon">☷</span></div><label>Nombre de la categoría<input name="newCategory" [(ngModel)]="newCategory" placeholder="Ej. Lácteos" required></label><button class="button button-primary" type="submit">＋ Agregar categoría</button></form>
+            <section class="panel category-list-panel"><div class="panel-heading"><div><h2>Tus categorías</h2><p>{{ categories.length }} secciones en el catálogo</p></div></div>
+              <div class="category-list">@for (category of categories; track category; let i = $index) {
+                <div class="category-row"><span class="category-emoji">{{ ['🥨', '🥤', '🍪', '🧼', '🧺', '🫧'][i % 6] }}</span><div class="category-row-name"><strong>{{ category }}</strong><small>{{ productCountForCategory(category) }} productos</small></div><button class="delete-user-button" title="Eliminar categoría" (click)="deleteCategory(category)">×</button></div>
+              }</div>
+            </section>
+          </div>
+        }
+
+        @if (activeSection === 'solicitudes' && isAdmin) {
+          <section class="page-heading"><div><p class="eyebrow">MENSAJES DEL EQUIPO</p><h1>Solicitudes de eliminación</h1><p class="muted">Revisa y responde las solicitudes que enviaron los empleados.</p></div></section>
+          <section class="panel deletion-inbox">
+            <div class="panel-heading"><div><h2>Solicitudes pendientes</h2><p>{{ pendingDeletionRequests.length }} pendientes</p></div></div>
+            @if (pendingDeletionRequests.length) {
+              <div class="deletion-request-list">
+                @for (request of pendingDeletionRequests; track request.id) {
+                  <article class="deletion-request-card">
+                    <div class="request-product-icon">📦</div>
+                    <div class="request-details">
+                      <div class="request-title-row"><strong>{{ request.productName }}</strong><span>PRODUCTO</span></div>
+                      <small>Solicitó {{ request.employeeName }} <span>·</span> {{ request.date | date:'dd MMM yyyy, HH:mm' }}</small>
+                      <p>{{ request.message || 'El empleado no agregó un comentario.' }}</p>
+                      <div class="request-actions"><button class="request-reject-button" (click)="resolveProductDeletionRequest(request, false)">Rechazar</button><button class="request-approve-button" (click)="resolveProductDeletionRequest(request, true)"><span aria-hidden="true">✓</span> Aprobar eliminación</button></div>
+                    </div>
+                  </article>
+                }
+              </div>
+            } @else {
+              <div class="empty-state"><span>✉</span><strong>No hay solicitudes pendientes</strong><p>Los mensajes para eliminar productos aparecerán aquí.</p></div>
+            }
+          </section>
+        }
+
+        @if (activeSection === 'cortes' && isAdmin) {
+          <section class="page-heading"><div><p class="eyebrow">CONTROL DE TURNOS</p><h1>Cortes de caja</h1><p class="muted">Consulta el movimiento diario de efectivo y el historial de cortes del equipo.</p></div></section>
+          <section class="panel daily-cash-panel">
+            <div class="panel-heading"><div><h2>Caja del día</h2><p>{{ todayDateLabel }} · El acumulado comienza en $0.00 cada día.</p></div><span class="daily-cash-badge">CORTE DIARIO</span></div>
+            <div class="daily-cash-metrics">
+              <article><small>FONDOS INICIALES</small><strong>{{ todayOpeningCash | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></article>
+              <article><small>EFECTIVO NETO DE CORTES</small><strong>{{ todayCashCuts | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></article>
+              <article class="daily-cash-total"><small>ACUMULADO REGISTRADO HOY</small><strong>{{ todayCashRegisterTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></article>
+            </div>
+            @if (dailyCashEntries.length) {
+              <div class="daily-cash-ledger">
+                @for (entry of dailyCashEntries; track entry.id) {
+                  <article class="daily-cash-entry">
+                    <span class="daily-cash-entry-icon" [class.daily-cash-entry-closing]="entry.type === 'closing'">{{ entry.type === 'opening' ? '＋' : '✓' }}</span>
+                    <div><strong>{{ entry.employeeName }} · {{ entry.description }}</strong><small>{{ entry.date | date:'HH:mm' }} · {{ entry.type === 'opening' ? 'Inicio de turno' : 'Corte final' }}</small></div>
+                    <b [class.daily-cash-entry-negative]="entry.amount < 0">{{ entry.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</b>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="daily-cash-empty">Todavía no hay fondos iniciales ni cortes registrados hoy.</p>
+            }
+          </section>
+          @if (shifts.length) {
+            <section class="shift-history-list">
+              @for (shift of shifts.slice().reverse(); track shift.id) {
+                <article class="panel shift-history-card">
+                  <div class="shift-history-heading">
+                    <div class="avatar">{{ shift.employeeName.charAt(0) }}</div>
+                    <div><strong>{{ shift.employeeName }}</strong><small>{{ shift.startedAt | date:'dd MMM yyyy, HH:mm' }} – {{ shift.endedAt ? (shift.endedAt | date:'HH:mm') : 'Turno abierto' }}</small></div>
+                    <span class="shift-record-badge" [class.shift-record-closed]="shift.status === 'closed'">{{ shift.status === 'closed' ? 'Corte finalizado' : 'En turno' }}</span>
+                  </div>
+                  @if (shift.status === 'closed') {
+                    <div class="shift-history-metrics">
+                      <div><small>VENTAS ESPERADAS</small><strong>{{ shift.expectedTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                      <div><small>FONDO INICIAL</small><strong>{{ (shift.openingCash ?? 0) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                      <div><small>EFECTIVO CONTADO</small><strong>{{ shift.cashCounted | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                      <div><small>COMPROBANTES TARJETA</small><strong>{{ shift.cardReceipts | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                      <div><small>DIFERENCIA</small><strong [class.shift-difference-positive]="(shift.difference ?? 0) > 0" [class.shift-difference-negative]="(shift.difference ?? 0) < 0">{{ shift.difference | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                    </div>
+                    <p class="shift-history-note">{{ shift.salesCount }} ventas · Efectivo neto para caja {{ ((shift.cashCounted ?? 0) - (shift.openingCash ?? 0)) | currency:'MXN':'symbol-narrow':'1.2-2' }} · Total contado {{ shift.countedTotal | currency:'MXN':'symbol-narrow':'1.2-2' }} · Horario asignado {{ shift.scheduleStart || 'sin definir' }}–{{ shift.scheduleEnd || 'sin definir' }}</p>
+                  } @else {
+                    <p class="shift-history-note">Fondo inicial {{ (shift.openingCash ?? 0) | currency:'MXN':'symbol-narrow':'1.2-2' }} · Horario asignado {{ shift.scheduleStart || 'sin definir' }}–{{ shift.scheduleEnd || 'sin definir' }} · Inicio {{ shift.startedAt | date:'HH:mm' }}</p>
+                  }
+                </article>
+              }
+            </section>
+          } @else {
+            <section class="panel"><div class="empty-state"><span>🧾</span><strong>Aún no hay cortes registrados</strong><p>Los cortes completados por los empleados aparecerán aquí.</p></div></section>
+          }
+        }
+
+        @if (activeSection === 'camaras' && isAdmin) {
+          <section class="page-heading"><div><p class="eyebrow">ACCESO RESTRINGIDO</p><h1>Cámaras de seguridad</h1><p class="muted">Administra la conexión local del sistema de vigilancia de tu tienda.</p></div><span class="camera-admin-badge">♙ Solo administrador</span></section>
+          <div class="camera-layout">
+            <form class="panel camera-settings-panel" (ngSubmit)="saveCameraSettings()">
+              <div class="panel-heading"><div><h2>Conexión del grabador</h2><p>La dirección se conserva solo en este equipo.</p></div><span class="camera-panel-icon">▣</span></div>
+              <div class="camera-fields">
+                <label>Nombre del equipo<input name="cameraName" [(ngModel)]="cameraDraft.name" placeholder="Ej. DVR de la tienda" required></label>
+                <label>Dirección local<input name="cameraAddress" [(ngModel)]="cameraDraft.address" placeholder="192.168.1.50:8080" autocomplete="off" required></label>
+              </div>
+              <p class="camera-security-note">Usa una dirección de red local (por ejemplo, 192.168.1.50) o de Tailscale. Para abrir un DVR local desde otra red, conecta el teléfono a Tailscale y configura una ruta de subred hacia la red de las cámaras. No incluyas usuario ni contraseña en el enlace.</p>
+              <div class="camera-actions">
+                <button class="button button-primary" type="submit">Guardar configuración</button>
+                @if (cameraSettings.address) {
+                  <a class="camera-open-link" [href]="cameraSettings.address" target="_blank" rel="noopener noreferrer">Abrir consola <span>↗</span></a>
+                }
+              </div>
+            </form>
+            <section class="panel camera-preview-panel">
+              <div class="camera-preview">
+                <div class="camera-preview-top"><span class="camera-live-indicator"></span><span>{{ cameraSettings.address ? 'EQUIPO CONFIGURADO' : 'VISTA DEL SISTEMA' }}</span><span class="camera-preview-lock">♙ ADMIN</span></div>
+                <div class="camera-preview-screen">
+                  <span class="camera-lens" aria-hidden="true"><i></i></span>
+                  <strong>{{ cameraSettings.address ? cameraSettings.name : 'Vista previa no disponible' }}</strong>
+                  <small>{{ cameraSettings.address ? cameraSettings.address : 'Conecta tu DVR/NVR para continuar' }}</small>
+                </div>
+                <div class="camera-preview-footer"><span>MONITOREO LOCAL</span><span>{{ cameraSettings.address ? 'ENLACE GUARDADO' : 'SIN CONEXIÓN' }}</span></div>
+              </div>
+              <div class="camera-info"><span class="camera-info-icon">i</span><div><strong>La vista en vivo depende del modelo</strong><p>Por ahora puedes abrir la consola del grabador. Para mostrar video dentro de la aplicación se requiere conocer el modelo y el protocolo compatible (HLS o WebRTC); RTSP no se reproduce directamente en el navegador.</p></div></div>
+            </section>
+          </div>
+        }
+        @if (activeSection === 'conexion' && (isAdmin || isMobileApp || isDesktopApp)) {
+          <section class="page-heading"><div><p class="eyebrow">DISPOSITIVOS DE LA TIENDA</p><h1>Conexión de equipos</h1><p class="muted">Vincula teléfonos y computadoras con una clave individual para cada equipo.</p></div></section>
+          <section class="panel mobile-connection-panel">
+            <div class="panel-heading"><div><h2>{{ storeConnected ? 'La sincronización está activa' : 'Preparando conexión' }}</h2><p>{{ connectionStatus }}</p></div><span class="camera-panel-icon">⌁</span></div>
+            @if (isRemoteDesktopClient) {
+              <p class="camera-security-note">Esta computadora está configurada como cliente de <strong>{{ desktopServerUrl }}</strong>. La dirección y la clave se conservan en este equipo para reconectarse automáticamente.</p>
+            }
+            @if (isDesktopApp && !isRemoteDesktopClient && connectionInfo && (connectionInfo.addresses.length || connectionInfo.tailscaleAddresses.length)) {
+              <div class="mobile-connection-values">
+                @if (connectionInfo.tailscaleAddresses.length) {
+                  <div><small>DIRECCIÓN VPN (TAILSCALE) · RECOMENDADA</small>@for (address of connectionInfo.tailscaleAddresses; track address) { <code>http://{{ address }}:{{ connectionInfo.port }}</code> }</div>
+                }
+                @if (connectionInfo.addresses.length) {
+                  <div><small>DIRECCIÓN DE RED LOCAL</small>@for (address of connectionInfo.addresses; track address) { <code>http://{{ address }}:{{ connectionInfo.port }}</code> }</div>
+                }
+              </div>
+              <p class="camera-security-note">Para acceso remoto, conecta ambos equipos al mismo Tailscale. Genera una clave individual por equipo y compártela solo con su administrador. La clave general anterior no se muestra para nuevas conexiones.</p>
+            } @else if (!isRemoteDesktopClient && !isDesktopApp) {
+              <p class="camera-security-note">No se detectó una dirección disponible. Confirma que la aplicación de escritorio esté abierta y, para acceso remoto, que Tailscale esté instalado y conectado en la computadora.</p>
+            }
+            @if (isDesktopApp && !isRemoteDesktopClient && isAdmin) {
+              <section class="connection-key-manager">
+                <h3>Claves individuales para equipos</h3>
+                <p class="muted">Genera una clave distinta para cada computadora o teléfono. La clave nueva se muestra una sola vez; cópiala y guárdala en el equipo que vas a vincular.</p>
+                <form class="mobile-reconnect-form camera-fields" (ngSubmit)="generateConnectionKey()">
+                  <label>Nombre del equipo<input name="connectionKeyName" [(ngModel)]="connectionKeyName" maxlength="80" placeholder="Ej. Laptop de administración" required></label>
+                  <button class="button button-primary" type="submit" [disabled]="connectionKeyBusy || !connectionInfo">{{ connectionKeyBusy ? 'Generando...' : 'Generar clave única' }}</button>
+                </form>
+                @if (generatedConnectionKey) {
+                  <div class="camera-security-note" role="status">
+                    <strong>Clave para {{ generatedConnectionKey.name }}</strong>
+                    <div class="mobile-connection-values"><code>{{ generatedConnectionKey.token }}</code></div>
+                    <p>Cópiala ahora y pégala en la computadora o teléfono correspondiente. No se volverá a mostrar.</p>
+                  </div>
+                }
+                @if (connectionKeys.length) {
+                  <div class="mobile-connection-values">
+                    @for (key of connectionKeys; track key.id) {
+                      <div><strong>{{ key.name }}</strong><button class="text-button" type="button" [disabled]="connectionKeyBusy" (click)="revokeConnectionKey(key)">Revocar clave</button></div>
+                    }
+                  </div>
+                } @else {
+                  <p class="muted">Todavía no hay claves individuales emitidas.</p>
+                }
+              </section>
+            }
+            @if (isMobileApp || isDesktopApp) {
+              <form class="mobile-reconnect-form camera-fields" (ngSubmit)="connectStore()">
+                @if (isDesktopApp) {
+                  <label>Dirección de la computadora principal<input name="reconnectDesktopServerUrl" [(ngModel)]="desktopServerUrl" inputmode="url" autocomplete="url" placeholder="http://100.100.20.5:43827" required></label>
+                  <label>Clave única de este equipo<input name="reconnectDesktopSyncToken" [(ngModel)]="desktopSyncToken" type="password" autocomplete="off" required></label>
+                } @else {
+                  <label>Dirección del servidor<input name="reconnectServerUrl" [(ngModel)]="mobileServerUrl" inputmode="url" autocomplete="url" required></label>
+                  <label>Clave de conexión<input name="reconnectToken" [(ngModel)]="mobileSyncToken" type="password" autocomplete="off" required></label>
+                }
+                <button class="button button-primary" type="submit" [disabled]="connectionBusy">{{ connectionBusy ? 'Conectando...' : 'Conectar o sincronizar' }}</button>
+              </form>
+            }
+          </section>
+        }
+      </div>
+    </main>
+    @if (showCashClosing && cashClosingShift) {
+      <div class="cash-closing-backdrop">
+        <form class="cash-closing-modal" (ngSubmit)="completeCashClosing()" role="dialog" aria-modal="true" aria-labelledby="cash-closing-title">
+          <div class="cash-closing-heading"><span class="cash-closing-icon">＄</span><div><p class="eyebrow">CIERRE DE TURNO</p><h2 id="cash-closing-title">Realiza tu corte final</h2><p>Confirma el efectivo y los comprobantes antes de cerrar sesión.</p></div></div>
+          <div class="cash-closing-summary">
+            <div><small>TOTAL DE VENTAS DEL TURNO</small><strong>{{ currentShiftSalesTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><span>Incluye ventas en efectivo y tarjeta</span></div>
+            <div><small>ESPERADO EN EFECTIVO</small><strong>{{ (currentShiftCashExpected + currentShiftOpeningCash) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><span>Fondo inicial más ventas en efectivo</span></div>
+            <div><small>ESPERADO EN TARJETA</small><strong>{{ currentShiftCardExpected | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><span>Compara con los comprobantes de terminal</span></div>
+          </div>
+          <div class="denomination-heading"><strong>Cuenta tus billetes y monedas</strong><span>Captura cuántas piezas tienes de cada denominación.</span></div>
+          <div class="denomination-grid">
+            @for (denomination of cashDenominations; track denomination.value) {
+              <label>{{ denomination.label }}<input [name]="'cash-' + denomination.value" [(ngModel)]="cashCounts[denomination.value]" type="number" min="0" step="1" inputmode="numeric" required></label>
+            }
+          </div>
+          <label class="card-receipts-field">Total de comprobantes de tarjeta<input name="cardReceiptTotal" [(ngModel)]="cardReceiptTotal" type="number" min="0" step="0.01" required></label>
+          <div class="cash-closing-result"><div><span>Fondo inicial del turno</span><strong>{{ currentShiftOpeningCash | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><div><span>Efectivo contado</span><strong>{{ cashCountTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><div><span>Total contado para entregar</span><strong>{{ (cashCountTotal + cardReceiptTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><div><span>Diferencia incluyendo fondo inicial</span><strong [class.shift-difference-positive]="cashClosingDifference > 0" [class.shift-difference-negative]="cashClosingDifference < 0">{{ cashClosingDifference | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div></div>
+          <p class="cash-closing-note">El corte se enviará al administrador con tu hora de salida. El efectivo neto registrado en caja será el contado menos el fondo inicial; cualquier diferencia quedará registrada para su revisión.</p>
+          @if (message) { <p class="form-message error-message">{{ message }}</p> }
+          <button class="button button-primary cash-closing-submit" type="submit">Finalizar corte y cerrar sesión <span>→</span></button>
+        </form>
+      </div>
+    }
+    @if (showShiftOpening && currentUser?.role === 'Empleado') {
+      <div class="cash-closing-backdrop">
+        <form class="cash-closing-modal shift-opening-modal" (ngSubmit)="startEmployeeShift()" role="dialog" aria-modal="true" aria-labelledby="shift-opening-title">
+          <div class="cash-closing-heading"><span class="cash-closing-icon">＄</span><div><p class="eyebrow">INICIO DE TURNO</p><h2 id="shift-opening-title">Registra tu fondo inicial</h2><p>Cuenta el efectivo que recibes para iniciar tu turno.</p></div></div>
+          <label class="shift-opening-field">¿Con cuánto efectivo inicias?<span>Este monto se considera al revisar tu corte final.</span><input name="shiftOpeningAmount" [(ngModel)]="shiftOpeningAmount" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+          @if (message) { <p class="form-message error-message">{{ message }}</p> }
+          <button class="button button-primary cash-closing-submit" type="submit">Iniciar turno <span>→</span></button>
+        </form>
+      </div>
+    }
+  </div>
+}
